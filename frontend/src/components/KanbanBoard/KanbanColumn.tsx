@@ -1,33 +1,53 @@
 import { Droppable } from '@hello-pangea/dnd';
 import { Task, TaskStatus } from '../../types';
+import { canTransition } from '../../utils/transitions';
 import TaskCard from './TaskCard';
 
 interface KanbanColumnProps {
   columnId: TaskStatus;
   title: string;
   tasks: Task[];
+  draggingFromStatus: TaskStatus | null;
 }
 
-// TODO: [FEATURE 10] Pintar esta columna de ROJO si la transición es inválida
-// o VERDE si es válida durante el Drag & Drop, y mostrar mensaje de error.
-// Implementar lógica de validación de transiciones:
-// TODO -> IN_PROGRESS (válido)
-// IN_PROGRESS -> IN_REVIEW, TODO (válido)
-// IN_REVIEW -> DONE, IN_PROGRESS (válido)
-// DONE -> ninguno (inválido)
+// CÓDIGO ANTERIOR (antes de Feature 10):
+// const KanbanColumn = ({ columnId, title, tasks }: KanbanColumnProps) => {
+//   return (
+//     <div className="kanban-column">
+//       <Droppable droppableId={columnId}>
+//         {(provided, _snapshot) => ( <div ref={provided.innerRef} {...provided.droppableProps}> ... )}
+//       </Droppable>
+//     </div>
+//   );
+// };
 
-const KanbanColumn = ({ columnId, title, tasks }: KanbanColumnProps) => {
+// FEATURE 10: Se agregó draggingFromStatus prop para resaltar columnas válidas/inválidas
+// durante el drag & drop. Las columnas válidas se muestran en verde, las inválidas en gris.
+const KanbanColumn = ({ columnId, title, tasks, draggingFromStatus }: KanbanColumnProps) => {
+  // Determinar si esta columna es un destino válido durante el drag
+  const isValidTarget = draggingFromStatus
+    ? canTransition(draggingFromStatus, columnId)
+    : null;
+  const isSourceColumn = draggingFromStatus === columnId;
+
+  // Clases CSS dinámicas
+  const getColumnClass = () => {
+    if (!draggingFromStatus || isSourceColumn) return 'kanban-column';
+    if (isValidTarget) return 'kanban-column column-valid-target';
+    return 'kanban-column column-invalid-target';
+  };
+
   return (
-    <div className="kanban-column" role="region" aria-label={`Columna ${title}`}>
+    <div className={getColumnClass()} role="region" aria-label={`Columna ${title}`}>
       <div className="column-header">
         <h2 id={`column-${columnId}`}>{title}</h2>
         <span className="task-count" aria-label={`${tasks.length} tareas`}>{tasks.length}</span>
       </div>
 
-      <Droppable droppableId={columnId}>
-        {(provided, _snapshot) => (
+      <Droppable droppableId={columnId} isDropDisabled={draggingFromStatus !== null && !isValidTarget && !isSourceColumn}>
+        {(provided, snapshot) => (
           <div
-            className="column-content"
+            className={`column-content ${snapshot.isDraggingOver && isValidTarget ? 'dragging-over-valid' : ''}`}
             ref={provided.innerRef}
             {...provided.droppableProps}
             role="list"

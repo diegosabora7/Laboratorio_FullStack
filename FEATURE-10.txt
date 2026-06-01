@@ -1,0 +1,474 @@
+================================================================================
+FEATURE 10 — Validación de transiciones de estado en Kanban
+================================================================================
+
+DESCRIPCIÓN:
+Las tareas siguen un flujo definido. No cualquier transición es válida:
+
+    TODO → IN_PROGRESS → IN_REVIEW → DONE
+     ↑                       │
+     └───────────────────────┘ (puede volver a IN_PROGRESS)
+
+TRANSICIONES VÁLIDAS:
+| Desde        | Puede ir a                |
+|--------------|---------------------------|
+| TODO         | IN_PROGRESS               |
+| IN_PROGRESS  | IN_REVIEW, TODO           |
+| IN_REVIEW    | DONE, IN_PROGRESS         |
+| DONE         | (ninguna — estado final)  |
+
+REQUISITOS:
+Backend:
+- Validar la transición en updateStatus() antes de guardar
+- Si la transición es inválida, lanzar InvalidStatusTransitionException
+- Devolver HTTP 422 Unprocessable Entity con mensaje descriptivo
+
+Frontend:
+- Al arrastrar una tarea, las columnas válidas se resaltan en verde
+- Las columnas inválidas se muestran deshabilitadas (gris, opacidad reducida)
+- Si el usuario intenta un drop inválido, mostrar un mensaje de error
+
+
+================================================================================
+PASO 1: Crear la excepción InvalidStatusTransitionException
+================================================================================
+
+ARCHIVO A CREAR: backend/task-service/src/main/java/com/taskmanager/taskservice/domain/exception/InvalidStatusTransitionException.java
+
+EXPLICACIÓN: Excepción personalizada que se lanza cuando se intenta una transición
+de estado no permitida. Extiende RuntimeException para no requerir checked exception.
+
+CÓDIGO:
+```java
+package com.taskmanager.taskservice.domain.exception;
+
+public class InvalidStatusTransitionException extends RuntimeException {
+
+    private final String currentStatus;
+    private final String targetStatus;
+
+    public InvalidStatusTransitionException(String currentStatus, String targetStatus) {
+        super(String.format("Transición de estado inválida: no se puede pasar de '%s' a '%s'",
+                currentStatus, targetStatus));
+        this.currentStatus = currentStatus;
+        this.targetStatus = targetStatus;
+    }
+
+    public String getCurrentStatus() {
+        return currentStatus;
+    }
+
+    public String getTargetStatus() {
+        return targetStatus;
+    }
+}
+```
+
+
+================================================================================
+PASO 2: Agregar método canTransitionTo() en el enum TaskStatus
+================================================================================
+
+ARCHIVO A MODIFICAR: backend/task-service/src/main/java/com/taskmanager/taskservice/domain/model/TaskStatus.java
+
+EXPLICACIÓN: Cada valor del enum define a qué estados puede transicionar.
+El método canTransitionTo() verifica si una transición es válida.
+
+CÓDIGO COMPLETO (reemplazar el archivo):
+```java
+package com.taskmanager.taskservice.domain.model;
+
+import java.util.EnumSet;
+import java.util.Set;
+
+public enum TaskStatus {
+    TODO {
+        @Override
+        public Set<TaskStatus> getAllowedTransitions() {
+            return EnumSet.of(IN_PROGRESS);
+        }
+    },
+    IN_PROGRESS {
+        @Override
+        public Set<TaskStatus> getAllowedTransitions() {
+            return EnumSet.of(IN_REVIEW, TODO);
+        }
+    },
+    IN_REVIEW {
+        @Override
+        public Set<TaskStatus> getAllowedTransitions() {
+            return EnumSet.of(DONE, IN_PROGRESS);
+        }
+    },
+    DONE {
+        @Override
+        public Set<TaskStatus> getAllowedTransitions() {
+            return EnumSet.noneOf(TaskStatus.class); // Estado final, no puede transicionar
+        }
+    };
+
+    public abstract Set<TaskStatus> getAllowedTransitions();
+
+    public boolean canTransitionTo(TaskStatus target) {
+        return getAllowedTransitions().contains(target);
+    }
+}
+```
+
+
+================================================================================
+PASO 3: Validar la transición en TaskService.updateStatus()
+================================================================================
+
+ARCHIVO A MODIFICAR: backend/task-service/src/main/java/com/taskmanager/taskservice/application/service/TaskService.java
+
+EXPLICACIÓN: Antes de cambiar el estado, verificar que la transición sea válida.
+Si no lo es, lanzar InvalidStatusTransitionException.
+
+AGREGAR IMPORT:
+```java
+import com.taskmanager.taskservice.domain.exception.InvalidStatusTransitionException;
+```
+
+MODIFICAR EL MÉTODO updateStatus() — agregar validación ANTES del setStatus:
+```java
+@Transactional
+@CacheEvict(value = {"tasks", "tasksByProject"}, allEntries = true)
+public TaskResponse updateStatus(Long id, String status) {
+    Task task = taskRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("Task not found with id: " + id));
+
+    TaskStatus newStatus = TaskStatus.valueOf(status);
+
+    // Validar transición de estado
+    if (!task.getStatus().canTransitionTo(newStatus)) {
+        throw new InvalidStatusTransitionException(
+                task.getStatus().name(), newStatus.name());
+    }
+
+    task.setStatus(newStatus);
+    Task updated = taskRepository.save(task);
+    return toResponse(updated);
+}
+```
+
+
+================================================================================
+PASO 4: Manejar la excepción en GlobalExceptionHandler (HTTP 422)
+================================================================================
+
+ARCHIVO A MODIFICAR: backend/task-service/src/main/java/com/taskmanager/taskservice/infrastructure/web/GlobalExceptionHandler.java
+
+EXPLICACIÓN: Capturar InvalidStatusTransitionException y devolver HTTP 422
+Unprocessable Entity con un mensaje descriptivo.
+
+AGREGAR IMPORT:
+```java
+import com.taskmanager.taskservice.domain.exception.InvalidStatusTransitionException;
+```
+
+AGREGAR MÉTODO:
+```java
+@ExceptionHandler(InvalidStatusTransitionException.class)
+public ResponseEntity<Map<String, Object>> handleInvalidStatusTransition(InvalidStatusTransitionException ex) {
+    Map<String, Object> error = new HashMap<>();
+    error.put("timestamp", LocalDateTime.now());
+    error.put("message", ex.getMessage());
+    error.put("status", 422);
+    error.put("error", "Unprocessable Entity");
+    return ResponseEntity.status(422).body(error);
+}
+```
+
+
+================================================================================
+PASO 5: Crear mapa de transiciones válidas en el Frontend
+================================================================================
+
+ARCHIVO A CREAR: frontend/src/utils/transitions.ts
+
+EXPLICACIÓN: Define las transiciones válidas en el frontend para poder
+resaltar columnas durante el drag sin esperar respuesta del backend.
+
+CÓDIGO:
+```typescript
+import { TaskStatus } from '../types';
+
+// Mapa de transiciones válidas (replica la lógica del backend)
+export const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
+  TODO: ['IN_PROGRESS'],
+  IN_PROGRESS: ['IN_REVIEW', 'TODO'],
+  IN_REVIEW: ['DONE', 'IN_PROGRESS'],
+  DONE: [], // Estado final
+};
+
+export const canTransition = (from: TaskStatus, to: TaskStatus): boolean => {
+  return VALID_TRANSITIONS[from].includes(to);
+};
+```
+
+
+================================================================================
+PASO 6: Modificar KanbanBoard para rastrear el drag activo
+================================================================================
+
+ARCHIVO A MODIFICAR: frontend/src/components/KanbanBoard/KanbanBoard.tsx
+
+EXPLICACIÓN: Necesitamos saber qué tarea se está arrastrando para determinar
+qué columnas son válidas. Usamos onDragStart para capturar el status de origen
+y pasarlo a las columnas.
+
+CÓDIGO COMPLETO:
+```tsx
+import { useState } from 'react';
+import { DragDropContext, DropResult, DragStart } from '@hello-pangea/dnd';
+import { useTasksByProject } from '../../hooks/useTasks';
+import { useUpdateTaskStatus } from '../../hooks/useTaskMutation';
+import { TaskStatus } from '../../types';
+import { canTransition } from '../../utils/transitions';
+import KanbanColumn from './KanbanColumn';
+
+const COLUMNS: { id: TaskStatus; title: string }[] = [
+  { id: 'TODO', title: 'Por Hacer' },
+  { id: 'IN_PROGRESS', title: 'En Progreso' },
+  { id: 'IN_REVIEW', title: 'En Revisión' },
+  { id: 'DONE', title: 'Completado' },
+];
+
+interface KanbanBoardProps {
+  projectId: number;
+}
+
+const KanbanBoard = ({ projectId }: KanbanBoardProps) => {
+  const { data: tasks = [], isLoading } = useTasksByProject(projectId);
+  const updateStatus = useUpdateTaskStatus(projectId);
+  const [draggingFromStatus, setDraggingFromStatus] = useState<TaskStatus | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const onDragStart = (start: DragStart) => {
+    const taskId = parseInt(start.draggableId, 10);
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setDraggingFromStatus(task.status);
+    }
+    setErrorMessage(null);
+  };
+
+  const onDragEnd = (result: DropResult) => {
+    setDraggingFromStatus(null);
+    const { destination, draggableId } = result;
+
+    if (!destination) return;
+
+    const newStatus = destination.droppableId as TaskStatus;
+    const taskId = parseInt(draggableId, 10);
+    const task = tasks.find(t => t.id === taskId);
+
+    if (task && !canTransition(task.status, newStatus)) {
+      setErrorMessage(`No se puede mover de "${task.status}" a "${newStatus}"`);
+      return; // No ejecutar la mutación
+    }
+
+    setErrorMessage(null);
+    updateStatus.mutate({ taskId, status: newStatus });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="kanban-loading" role="status" aria-live="polite">
+        <p>Cargando tareas...</p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {errorMessage && (
+        <div className="kanban-error" role="alert">
+          ⚠️ {errorMessage}
+        </div>
+      )}
+      <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        <div className="kanban-board" role="region" aria-label="Tablero Kanban">
+          {COLUMNS.map((column) => (
+            <KanbanColumn
+              key={column.id}
+              columnId={column.id}
+              title={column.title}
+              tasks={tasks.filter((task) => task.status === column.id)}
+              draggingFromStatus={draggingFromStatus}
+            />
+          ))}
+        </div>
+      </DragDropContext>
+    </>
+  );
+};
+
+export default KanbanBoard;
+```
+
+
+================================================================================
+PASO 7: Modificar KanbanColumn para resaltar columnas válidas/inválidas
+================================================================================
+
+ARCHIVO A MODIFICAR: frontend/src/components/KanbanBoard/KanbanColumn.tsx
+
+EXPLICACIÓN: Recibe draggingFromStatus como prop. Si hay un drag activo,
+calcula si esta columna es un destino válido y aplica estilos visuales.
+
+CÓDIGO COMPLETO:
+```tsx
+import { Droppable } from '@hello-pangea/dnd';
+import { Task, TaskStatus } from '../../types';
+import { canTransition } from '../../utils/transitions';
+import TaskCard from './TaskCard';
+
+interface KanbanColumnProps {
+  columnId: TaskStatus;
+  title: string;
+  tasks: Task[];
+  draggingFromStatus: TaskStatus | null;
+}
+
+const KanbanColumn = ({ columnId, title, tasks, draggingFromStatus }: KanbanColumnProps) => {
+  // Determinar si esta columna es un destino válido durante el drag
+  const isValidTarget = draggingFromStatus
+    ? canTransition(draggingFromStatus, columnId)
+    : null; // null = no hay drag activo
+  const isSourceColumn = draggingFromStatus === columnId;
+
+  // Clases CSS dinámicas
+  const getColumnClass = () => {
+    if (!draggingFromStatus || isSourceColumn) return 'kanban-column';
+    if (isValidTarget) return 'kanban-column column-valid-target';
+    return 'kanban-column column-invalid-target';
+  };
+
+  return (
+    <div className={getColumnClass()} role="region" aria-label={`Columna ${title}`}>
+      <div className="column-header">
+        <h2 id={`column-${columnId}`}>{title}</h2>
+        <span className="task-count" aria-label={`${tasks.length} tareas`}>{tasks.length}</span>
+      </div>
+
+      <Droppable droppableId={columnId} isDropDisabled={draggingFromStatus !== null && !isValidTarget && !isSourceColumn}>
+        {(provided, snapshot) => (
+          <div
+            className={`column-content ${snapshot.isDraggingOver && isValidTarget ? 'dragging-over-valid' : ''}`}
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            role="list"
+            aria-labelledby={`column-${columnId}`}
+          >
+            {tasks.map((task, index) => (
+              <TaskCard key={task.id} task={task} index={index} />
+            ))}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
+    </div>
+  );
+};
+
+export default KanbanColumn;
+```
+
+
+================================================================================
+PASO 8: Agregar estilos CSS para las columnas válidas/inválidas
+================================================================================
+
+ARCHIVO A MODIFICAR: frontend/src/styles/Kanban.css
+
+ESTILOS A AGREGAR al final del archivo:
+
+```css
+/* Feature 10 — Validación visual de transiciones */
+.column-valid-target {
+  border: 2px solid #10b981;
+  background-color: rgba(16, 185, 129, 0.05);
+  transition: all 0.2s ease;
+}
+
+.column-invalid-target {
+  border: 2px solid #d1d5db;
+  background-color: rgba(107, 114, 128, 0.05);
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.dragging-over-valid {
+  background-color: rgba(16, 185, 129, 0.1);
+}
+
+.kanban-error {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+```
+
+
+================================================================================
+PASO 9: Verificar y probar
+================================================================================
+
+PRUEBAS BACKEND:
+1. Reiniciar task-service (mvn clean spring-boot:run)
+2. Crear una tarea en estado TODO:
+   POST http://localhost:8081/api/tasks
+   {"title":"Test transición","priority":"HIGH","projectId":1,"assigneeId":1}
+
+3. Transición VÁLIDA (TODO → IN_PROGRESS):
+   PATCH http://localhost:8081/api/tasks/{id}/status?status=IN_PROGRESS
+   → Debe responder 200 OK
+
+4. Transición INVÁLIDA (IN_PROGRESS → DONE, saltando IN_REVIEW):
+   PATCH http://localhost:8081/api/tasks/{id}/status?status=DONE
+   → Debe responder 422 con mensaje:
+   {"message":"Transición de estado inválida: no se puede pasar de 'IN_PROGRESS' a 'DONE'","status":422}
+
+5. Transición INVÁLIDA desde DONE:
+   Primero llevar a DONE: IN_PROGRESS → IN_REVIEW → DONE
+   Luego intentar: PATCH .../status?status=TODO
+   → Debe responder 422
+
+PRUEBAS FRONTEND:
+1. Navegar a http://localhost:5173/kanban
+2. Arrastrar una tarea de TODO:
+   - La columna IN_PROGRESS se resalta en VERDE (válida)
+   - Las columnas IN_REVIEW y DONE se muestran en GRIS con opacidad (inválidas)
+3. Soltar en columna verde → se mueve correctamente
+4. Arrastrar una tarea de DONE:
+   - TODAS las columnas se muestran en gris (no puede ir a ningún lado)
+5. Intentar soltar en columna inválida → aparece mensaje de error rojo
+6. El mensaje desaparece al iniciar un nuevo drag
+
+
+================================================================================
+RESUMEN DE ARCHIVOS
+================================================================================
+
+BACKEND (crear):
+- domain/exception/InvalidStatusTransitionException.java → excepción personalizada
+
+BACKEND (modificar):
+- domain/model/TaskStatus.java → agregar getAllowedTransitions() y canTransitionTo()
+- application/service/TaskService.java → agregar validación en updateStatus()
+- infrastructure/web/GlobalExceptionHandler.java → handler para 422
+
+FRONTEND (crear):
+- src/utils/transitions.ts → mapa de transiciones + función canTransition()
+
+FRONTEND (modificar):
+- src/components/KanbanBoard/KanbanBoard.tsx → onDragStart + validación + error message
+- src/components/KanbanBoard/KanbanColumn.tsx → props draggingFromStatus + estilos dinámicos
+- src/styles/Kanban.css → estilos para columnas válidas/inválidas

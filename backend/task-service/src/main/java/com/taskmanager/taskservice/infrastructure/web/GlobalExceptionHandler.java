@@ -1,5 +1,6 @@
 package com.taskmanager.taskservice.infrastructure.web;
 
+import com.taskmanager.taskservice.domain.exception.InvalidStatusTransitionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -55,5 +56,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body("El registro fue modificado por otro usuario, por favor recargue la pagina e intente nuevamente");
+    }
+
+    // FEATURE 10: Transición de estado inválida → 422 Unprocessable Entity
+    @ExceptionHandler(InvalidStatusTransitionException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidStatusTransition(InvalidStatusTransitionException ex) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("timestamp", LocalDateTime.now());
+        error.put("message", ex.getMessage());
+        error.put("status", 422);
+        error.put("error", "Unprocessable Entity");
+        return ResponseEntity.status(422).body(error);
     }
 }

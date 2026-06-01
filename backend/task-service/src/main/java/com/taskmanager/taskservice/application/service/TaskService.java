@@ -6,6 +6,7 @@ import com.taskmanager.taskservice.domain.model.Project;
 import com.taskmanager.taskservice.domain.model.Task;
 import com.taskmanager.taskservice.domain.model.TaskPriority;
 import com.taskmanager.taskservice.domain.model.TaskStatus;
+import com.taskmanager.taskservice.domain.exception.InvalidStatusTransitionException;
 import com.taskmanager.taskservice.domain.repository.ProjectRepository;
 import com.taskmanager.taskservice.domain.repository.TaskRepository;
 import com.taskmanager.taskservice.infrastructure.client.UserServiceClient;
@@ -107,9 +108,17 @@ public class TaskService {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Task not found with id: " + id));
 
+        TaskStatus newStatus = TaskStatus.valueOf(status);
+
+        // FEATURE 10: Validar transición de estado
+        if (!task.getStatus().canTransitionTo(newStatus)) {
+            throw new InvalidStatusTransitionException(
+                    task.getStatus().name(), newStatus.name());
+        }
+
         // TODO: [LABORATORIO - BUG 2] - Race condition: no hay verificación de versión.
         // El último en escribir gana silenciosamente.
-        task.setStatus(TaskStatus.valueOf(status));
+        task.setStatus(newStatus);
         Task updated = taskRepository.save(task);
         return toResponse(updated);
     }

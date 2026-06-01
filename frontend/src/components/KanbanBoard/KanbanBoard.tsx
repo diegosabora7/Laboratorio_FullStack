@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { DragDropContext, DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, DropResult, DragStart } from '@hello-pangea/dnd';
 import { useTasksByProject } from '../../hooks/useTasks';
 import { useUpdateTaskStatus } from '../../hooks/useTaskMutation';
 import { TaskStatus } from '../../types';
+import { canTransition } from '../../utils/transitions';
 import KanbanColumn from './KanbanColumn';
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
@@ -19,15 +20,34 @@ interface KanbanBoardProps {
 const KanbanBoard = ({ projectId }: KanbanBoardProps) => {
   const { data: tasks = [], isLoading } = useTasksByProject(projectId);
   const updateStatus = useUpdateTaskStatus(projectId);
+  const [draggingFromStatus, setDraggingFromStatus] = useState<TaskStatus | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const onDragStart = (start: DragStart) => {
+    const taskId = parseInt(start.draggableId, 10);
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setDraggingFromStatus(task.status);
+    }
+    setErrorMessage(null);
+  };
 
   const onDragEnd = (result: DropResult) => {
+    setDraggingFromStatus(null);
     const { destination, draggableId } = result;
 
     if (!destination) return;
 
     const newStatus = destination.droppableId as TaskStatus;
     const taskId = parseInt(draggableId, 10);
+    const task = tasks.find(t => t.id === taskId);
 
+    if (task && !canTransition(task.status, newStatus)) {
+      setErrorMessage(`No se puede mover de "${task.status}" a "${newStatus}"`);
+      return;
+    }
+
+    setErrorMessage(null);
     updateStatus.mutate({ taskId, status: newStatus });
   };
 
@@ -40,18 +60,26 @@ const KanbanBoard = ({ projectId }: KanbanBoardProps) => {
   }
 
   return (
-    <DragDropContext onDragEnd={onDragEnd}>
-      <div className="kanban-board" role="region" aria-label="Tablero Kanban">
-        {COLUMNS.map((column) => (
-          <KanbanColumn
-            key={column.id}
-            columnId={column.id}
-            title={column.title}
-            tasks={tasks.filter((task) => task.status === column.id)}
-          />
-        ))}
-      </div>
-    </DragDropContext>
+    <>
+      {errorMessage && (
+        <div className="kanban-error" role="alert">
+          ⚠️ {errorMessage}
+        </div>
+      )}
+      <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+        <div className="kanban-board" role="region" aria-label="Tablero Kanban">
+          {COLUMNS.map((column) => (
+            <KanbanColumn
+              key={column.id}
+              columnId={column.id}
+              title={column.title}
+              tasks={tasks.filter((task) => task.status === column.id)}
+              draggingFromStatus={draggingFromStatus}
+            />
+          ))}
+        </div>
+      </DragDropContext>
+    </>
   );
 };
 
