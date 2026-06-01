@@ -1,0 +1,64 @@
+# =====================================
+# BACKEND (Java / Maven / Spring Boot)
+# =====================================
+
+# Compiled class files
+**/target/
+
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+*.env.local
+
+# =====================================
+# FRONTEND (Node / React / Vite)
+# =====================================
+
+# Dependencies
+**/node_modules/
+
+# Build output
+frontend/dist/
+
+# Vite cache
+frontend/.vite/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Test coverage
+frontend/coverage/
+
+# =====================================
+# DOCKER
+# =====================================
+docker-compose.override.yml
+
+# =====================================
+# GENERAL
+# =====================================
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar

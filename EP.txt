@@ -1,0 +1,300 @@
+================================================================================
+ENDPOINTS - CURLS DE PRUEBA CON DATA
+================================================================================
+Todos los curls están listos para ejecutar en bash/terminal.
+Para Postman: importar como "Raw Text" o copiar URL + body.
+
+================================================================================
+USER SERVICE (port 8082)
+================================================================================
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 1. REGISTRAR USUARIO
+# Descripción: Crea un nuevo usuario en el sistema con rol USER por defecto.
+# Endpoint: POST /api/auth/register
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request POST 'http://localhost:8082/api/auth/register' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "fullName": "Juan Pérez",
+    "email": "juan@test.com",
+    "password": "123456",
+    "role": "USER"
+}'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 2. REGISTRAR ADMIN
+# Descripción: Crea un usuario con rol ADMIN.
+# Endpoint: POST /api/auth/register
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request POST 'http://localhost:8082/api/auth/register' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "fullName": "Admin Sistema",
+    "email": "admin@test.com",
+    "password": "admin123",
+    "role": "ADMIN"
+}'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 3. LOGIN
+# Descripción: Autentica un usuario y devuelve un JWT token.
+# Endpoint: POST /api/auth/login
+# Auth: No requiere
+# Respuesta: { token, userId, name, email, role }
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request POST 'http://localhost:8082/api/auth/login' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "email": "admin@test.com",
+    "password": "admin123"
+}'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 4. REFRESH TOKEN
+# Descripción: Genera un nuevo access token a partir del token actual (incluso expirado).
+# Endpoint: POST /api/auth/refresh
+# Auth: Bearer token en header
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request POST 'http://localhost:8082/api/auth/refresh' \
+--header 'Authorization: Bearer <TU_TOKEN_AQUI>'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 5. LISTAR USUARIOS ACTIVOS
+# Descripción: Devuelve todos los usuarios con activo=true.
+# Endpoint: GET /api/users
+# Auth: No requiere (endpoints de users son públicos en SecurityConfig)
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8082/api/users'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 6. DETALLE DE USUARIO POR ID
+# Descripción: Devuelve la información completa de un usuario específico.
+# Endpoint: GET /api/users/{id}
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8082/api/users/1'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 7. OBTENER NOMBRE DE USUARIO POR ID
+# Descripción: Devuelve solo el nombre del usuario (usado internamente por task-service).
+# Endpoint: GET /api/users/{id}/name
+# Auth: No requiere
+# Respuesta: { "name": "Diego Yandun" }
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8082/api/users/1/name'
+
+
+================================================================================
+TASK SERVICE (port 8081)
+================================================================================
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 8. CREAR PROYECTO
+# Descripción: Crea un nuevo proyecto para organizar tareas.
+# Endpoint: POST /api/projects
+# Auth: No requiere (task-service no valida JWT)
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request POST 'http://localhost:8081/api/projects' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "name": "Sprint 2 - Frontend",
+    "description": "Desarrollo de componentes React",
+    "ownerId": 1,
+    "status": "ACTIVE"
+}'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 9. LISTAR TODOS LOS PROYECTOS
+# Descripción: Devuelve todos los proyectos existentes.
+# Endpoint: GET /api/projects
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8081/api/projects'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 10. DETALLE DE PROYECTO POR ID
+# Descripción: Devuelve la información de un proyecto específico.
+# Endpoint: GET /api/projects/{id}
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8081/api/projects/1'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 11. CREAR TAREA (básica, sin fecha)
+# Descripción: Crea una nueva tarea en un proyecto. Estado inicial: TODO.
+# Endpoint: POST /api/tasks
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request POST 'http://localhost:8081/api/tasks' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "title": "Implementar login",
+    "description": "Crear formulario de login con validación",
+    "priority": "HIGH",
+    "projectId": 1,
+    "assigneeId": 1
+}'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 12. CREAR TAREA (con fecha de vencimiento)
+# Descripción: Crea una tarea con dueDate. Útil para probar el endpoint /overdue.
+# Endpoint: POST /api/tasks
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request POST 'http://localhost:8081/api/tasks' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "title": "Tarea con fecha vencida",
+    "description": "Esta tarea ya venció para probar overdue",
+    "priority": "CRITICAL",
+    "projectId": 1,
+    "assigneeId": 1,
+    "dueDate": "2024-01-15"
+}'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 13. CREAR TAREA (con fecha futura)
+# Descripción: Tarea con fecha futura, NO debe aparecer en overdue.
+# Endpoint: POST /api/tasks
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request POST 'http://localhost:8081/api/tasks' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "title": "Tarea futura",
+    "description": "Esta tarea tiene fecha futura",
+    "priority": "LOW",
+    "projectId": 1,
+    "assigneeId": 2,
+    "dueDate": "2027-12-31"
+}'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 14. OBTENER TAREA POR ID
+# Descripción: Devuelve el detalle completo de una tarea específica.
+# Endpoint: GET /api/tasks/{id}
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8081/api/tasks/1'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 15. LISTAR TAREAS POR PROYECTO
+# Descripción: Devuelve todas las tareas de un proyecto específico.
+# Endpoint: GET /api/tasks/project/{projectId}
+# Auth: No requiere
+# Nota: Este endpoint usa caché Redis. Limpiar con: docker exec redis-kanban redis-cli FLUSHALL
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8081/api/tasks/project/1'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 16. LISTAR TAREAS POR ASIGNADO (paginado)
+# Descripción: Devuelve las tareas asignadas a un usuario, con paginación.
+# Endpoint: GET /api/tasks/assignee/{userId}?page=0&size=10
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8081/api/tasks/assignee/1?page=0&size=10'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 17. CAMBIAR ESTADO DE TAREA
+# Descripción: Actualiza el status de una tarea (simula drag & drop en Kanban).
+# Endpoint: PATCH /api/tasks/{id}/status?status=X
+# Auth: No requiere
+# Valores válidos: TODO, IN_PROGRESS, IN_REVIEW, DONE
+# Nota: Con optimistic locking, si otro usuario modificó la tarea, devuelve 409.
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request PATCH 'http://localhost:8081/api/tasks/1/status?status=IN_PROGRESS'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 18. ASIGNAR TAREA A USUARIO
+# Descripción: Cambia el assigneeId de una tarea.
+# Endpoint: PATCH /api/tasks/{id}/assign?assigneeId=X
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request PATCH 'http://localhost:8081/api/tasks/1/assign?assigneeId=2'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 19. ESTADÍSTICAS DEL PROYECTO
+# Descripción: Devuelve contadores de tareas por estado y porcentaje de completado.
+# Endpoint: GET /api/tasks/project/{projectId}/stats
+# Auth: No requiere
+# Respuesta: { projectId, totalTasks, todoCount, inProgressCount, inReviewCount, doneCount, completionPercentage }
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8081/api/tasks/project/1/stats'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 20. TAREAS VENCIDAS DEL PROYECTO
+# Descripción: Devuelve tareas cuya dueDate ya pasó y su status NO es DONE.
+# Endpoint: GET /api/tasks/project/{projectId}/overdue
+# Auth: No requiere
+# Nota: Solo aparecen tareas con dueDate < hoy AND status != DONE
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8081/api/tasks/project/1/overdue'
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 21. BÚSQUEDA AVANZADA (placeholder - Feature 8 pendiente)
+# Descripción: Endpoint de búsqueda con filtros. Actualmente devuelve [].
+# Endpoint: GET /api/tasks/search?status=X&priority=Y&assigneeId=Z
+# Auth: No requiere
+# ──────────────────────────────────────────────────────────────────────────────
+curl --location --request GET 'http://localhost:8081/api/tasks/search?status=TODO&priority=HIGH&assigneeId=1'
+
+
+================================================================================
+COMANDOS ÚTILES DE INFRAESTRUCTURA
+================================================================================
+
+# ──────────────────────────────────────────────────────────────────────────────
+# LIMPIAR CACHÉ REDIS
+# Descripción: Elimina todas las entradas de caché. Necesario para probar sin datos cacheados.
+# ──────────────────────────────────────────────────────────────────────────────
+docker exec redis-kanban redis-cli FLUSHALL
+
+# ──────────────────────────────────────────────────────────────────────────────
+# VER KEYS EN REDIS
+# Descripción: Lista todas las keys almacenadas en Redis (para debug de caché).
+# ──────────────────────────────────────────────────────────────────────────────
+docker exec redis-kanban redis-cli KEYS "*"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# VERIFICAR CONTENEDORES DOCKER
+# Descripción: Muestra el estado de los contenedores de infraestructura.
+# ──────────────────────────────────────────────────────────────────────────────
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# LEVANTAR INFRAESTRUCTURA
+# Descripción: Inicia PostgreSQL (users + tasks) y Redis.
+# ──────────────────────────────────────────────────────────────────────────────
+docker-compose up -d postgres-users postgres-tasks redis
+
+
+================================================================================
+COMANDOS PARA LEVANTAR SERVICIOS (PowerShell)
+================================================================================
+
+# User Service (terminal 1):
+$env:JAVA_HOME = "C:\Java\jdk-17.0.12"; cd C:\Users\USUARIO\Documents\kiro_Diners\Laboratorio_FullStack\backend\user-service; mvn clean spring-boot:run
+
+# Task Service (terminal 2):
+$env:JAVA_HOME = "C:\Java\jdk-17.0.12"; cd C:\Users\USUARIO\Documents\kiro_Diners\Laboratorio_FullStack\backend\task-service; mvn clean spring-boot:run
+
+# Frontend (terminal 3):
+cd C:\Users\USUARIO\Documents\kiro_Diners\Laboratorio_FullStack\frontend; npm run dev
+
+
+================================================================================
+FLUJO DE PRUEBA COMPLETO (ejecutar en orden)
+================================================================================
+
+# 1. Registrar usuarios
+# 2. Login → copiar el token
+# 3. Crear proyecto
+# 4. Crear varias tareas (con y sin fecha vencida)
+# 5. Probar stats → verificar contadores
+# 6. Probar overdue → verificar tareas vencidas
+# 7. Cambiar estado de tarea → verificar que la caché se invalida
+# 8. Probar concurrencia → dos PATCH al mismo ID → uno da 409
+# 9. Bajar user-service → probar que task-service sigue funcionando con "Unknown User"

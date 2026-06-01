@@ -1,0 +1,311 @@
+================================================================================
+GUÍA GIT — Subir proyecto y clonar en otra máquina
+================================================================================
+
+
+================================================================================
+PARTE 1: SUBIR EL PROYECTO A GITHUB
+================================================================================
+
+PREREQUISITOS:
+- Tener cuenta en https://github.com
+- Tener Git instalado (verificar con: git --version)
+- Tener configurado tu usuario de Git:
+    git config --global user.name "Tu Nombre"
+    git config --global user.email "tu@email.com"
+
+PASO 1: Crear repositorio en GitHub
+────────────────────────────────────
+1. Ir a https://github.com/new
+2. Nombre del repositorio: Laboratorio_FullStack (o el que prefieras)
+3. Descripción: "Laboratorio de práctica deliberada - Task Manager Microservices"
+4. Visibilidad: Private (o Public si quieres compartirlo)
+5. NO marcar "Add a README" (ya tenemos archivos)
+6. NO marcar "Add .gitignore" (ya lo creamos)
+7. Clic en "Create repository"
+8. Copiar la URL del repositorio (ej: https://github.com/TU_USUARIO/Laboratorio_FullStack.git)
+https://github.com/diegosabora7/Laboratorio_FullStack.git
+
+
+PASO 2: Inicializar Git y subir (ejecutar en PowerShell)
+────────────────────────────────────────────────────────
+cd C:\Users\USUARIO\Documents\kiro_Diners\Laboratorio_FullStack
+
+# Inicializar repositorio Git
+git init
+
+# Agregar todos los archivos (el .gitignore filtra lo innecesario)
+git add .
+
+# Verificar qué se va a commitear (opcional pero recomendado)
+git status
+
+# Crear el primer commit
+git commit -m "feat: proyecto completo - 7 bugs corregidos + Feature 9 Dashboard"
+
+# Agregar el remote de GitHub
+git remote add origin https://github.com/TU_USUARIO/Laboratorio_FullStack.git
+
+# Subir a GitHub (rama main)
+git branch -M main
+git push -u origin main
+
+PASO 3: Verificar
+──────────────────
+- Ir a https://github.com/TU_USUARIO/Laboratorio_FullStack
+- Verificar que todos los archivos están subidos
+- Verificar que node_modules/ y target/ NO están (gracias al .gitignore)
+
+
+================================================================================
+PARTE 2: SUBIR EL PROYECTO A GITLAB
+================================================================================
+
+PREREQUISITOS:
+- Tener cuenta en https://gitlab.com
+- Tener Git instalado
+
+PASO 1: Crear repositorio en GitLab
+────────────────────────────────────
+1. Ir a https://gitlab.com/projects/new#blank_project
+2. Nombre del proyecto: Laboratorio_FullStack
+3. Visibilidad: Private (o Public)
+4. DESMARCAR "Initialize repository with a README"
+5. Clic en "Create project"
+6. Copiar la URL (ej: https://gitlab.com/TU_USUARIO/Laboratorio_FullStack.git)
+
+PASO 2: Agregar GitLab como segundo remote (si ya subiste a GitHub)
+───────────────────────────────────────────────────────────────────
+cd C:\Users\USUARIO\Documents\kiro_Diners\Laboratorio_FullStack
+
+# Agregar GitLab como segundo remote
+git remote add gitlab https://gitlab.com/TU_USUARIO/Laboratorio_FullStack.git
+
+# Subir a GitLab
+git push -u gitlab main
+
+PASO 2 (alternativo): Si SOLO quieres subir a GitLab (sin GitHub)
+─────────────────────────────────────────────────────────────────
+cd C:\Users\USUARIO\Documents\kiro_Diners\Laboratorio_FullStack
+
+git init
+git add .
+git commit -m "feat: proyecto completo - 7 bugs corregidos + Feature 9 Dashboard"
+git remote add origin https://gitlab.com/TU_USUARIO/Laboratorio_FullStack.git
+git branch -M main
+git push -u origin main
+
+PASO 3: Verificar
+──────────────────
+- Ir a https://gitlab.com/TU_USUARIO/Laboratorio_FullStack
+- Verificar que los archivos están subidos correctamente
+
+
+================================================================================
+PARTE 3: CLONAR EL PROYECTO EN OTRA MÁQUINA
+================================================================================
+
+PREREQUISITOS EN LA NUEVA MÁQUINA:
+- Git instalado
+- Java 17 (JDK, no JRE)
+- Maven 3.8+
+- Node.js 18+ y npm
+- Docker y Docker Compose
+- PostgreSQL client (opcional, para debug)
+
+PASO 1: Clonar el repositorio
+──────────────────────────────
+# Desde GitHub:
+git clone https://github.com/TU_USUARIO/Laboratorio_FullStack.git
+
+# O desde GitLab:
+git clone https://gitlab.com/TU_USUARIO/Laboratorio_FullStack.git
+
+# Entrar al proyecto
+cd Laboratorio_FullStack
+
+PASO 2: Levantar infraestructura (Docker)
+──────────────────────────────────────────
+# Levantar PostgreSQL (users + tasks) y Redis
+docker-compose up -d postgres-users postgres-tasks redis
+
+# Verificar que están corriendo
+docker ps
+
+# Esperar 5 segundos a que PostgreSQL esté listo
+# (la primera vez puede tardar un poco más)
+
+PASO 3: Configurar JAVA_HOME
+─────────────────────────────
+# En PowerShell (ajustar la ruta según tu instalación de Java 17):
+$env:JAVA_HOME = "C:\ruta\a\tu\jdk-17"
+
+# En Linux/Mac:
+export JAVA_HOME=/usr/lib/jvm/java-17
+export PATH=$JAVA_HOME/bin:$PATH
+
+# Verificar:
+java -version
+# Debe mostrar: java version "17.x.x"
+
+PASO 4: Compilar y levantar User Service
+─────────────────────────────────────────
+# Terminal 1:
+cd backend/user-service
+mvn clean spring-boot:run
+
+# Esperar a ver: "Started UserServiceApplication in X seconds"
+# Verificar: curl http://localhost:8082/api/users → debe responder
+
+PASO 5: Compilar y levantar Task Service
+─────────────────────────────────────────
+# Terminal 2:
+cd backend/task-service
+mvn clean spring-boot:run
+
+# Esperar a ver: "Started TaskServiceApplication in X seconds"
+# Verificar: curl http://localhost:8081/api/tasks/project/1/stats → debe responder con JSON
+
+PASO 6: Instalar dependencias y levantar Frontend
+──────────────────────────────────────────────────
+# Terminal 3:
+cd frontend
+npm install
+npm run dev
+
+# Esperar a ver: "VITE ready in X ms → http://localhost:5173/"
+# Abrir navegador en: http://localhost:5173
+
+PASO 7: Crear datos iniciales
+──────────────────────────────
+# Registrar un usuario:
+curl --location --request POST 'http://localhost:8082/api/auth/register' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "fullName": "Admin",
+    "email": "admin@test.com",
+    "password": "admin123",
+    "role": "ADMIN"
+}'
+
+# Crear un proyecto:
+curl --location --request POST 'http://localhost:8081/api/projects' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "name": "Sprint 1 - Backend",
+    "description": "Primer sprint del proyecto",
+    "ownerId": 1,
+    "status": "ACTIVE"
+}'
+
+# Crear tareas:
+curl --location --request POST 'http://localhost:8081/api/tasks' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "title": "Primera tarea",
+    "description": "Tarea de prueba",
+    "priority": "HIGH",
+    "projectId": 1,
+    "assigneeId": 1
+}'
+
+PASO 8: Probar la aplicación
+────────────────────────────
+1. Abrir http://localhost:5173
+2. Login con: admin@test.com / admin123
+3. Navegar al Kanban → ver tareas
+4. Navegar al Dashboard → ver estadísticas
+5. Arrastrar tareas entre columnas
+
+
+================================================================================
+PARTE 4: COMANDOS GIT ÚTILES
+================================================================================
+
+# Ver estado de archivos modificados
+git status
+
+# Ver diferencias
+git diff
+
+# Agregar archivos específicos
+git add archivo.java
+
+# Agregar todos los cambios
+git add .
+
+# Commit con mensaje descriptivo (conventional commits)
+git commit -m "fix: corregir N+1 queries en getByProject"
+git commit -m "feat: implementar dashboard de estadísticas"
+git commit -m "refactor: extraer batch loading de userNames"
+
+# Subir cambios a GitHub
+git push origin main
+
+# Subir cambios a GitLab
+git push gitlab main
+
+# Subir a ambos remotes
+git push origin main && git push gitlab main
+
+# Ver historial de commits
+git log --oneline
+
+# Crear una rama nueva
+git checkout -b feature/busqueda-avanzada
+
+# Volver a main
+git checkout main
+
+# Traer cambios del remoto
+git pull origin main
+
+
+================================================================================
+PARTE 5: ESTRUCTURA ESPERADA DESPUÉS DE CLONAR
+================================================================================
+
+Laboratorio_FullStack/
+├── .gitignore
+├── docker-compose.yml
+├── EP.txt                          ← Curls de prueba
+├── Git_Guide.txt                   ← Este archivo
+├── BUSQUEDAS.txt                   ← Guía de búsqueda por bug
+├── FEATURE-9.txt                   ← Paso a paso del Feature 9
+├── BUGS/                           ← Documentación de bugs con archivos
+│   ├── BUG1/ ... BUG7/
+├── JUSTIFICACION_TECNICA/          ← Justificación de cada corrección
+│   └── README.md
+├── docs/                           ← Documentación individual por bug
+│   ├── BUG-1-fix.md ... BUG-7-fix.md
+├── backend/
+│   ├── task-service/               ← Microservicio de tareas (port 8081)
+│   └── user-service/               ← Microservicio de usuarios (port 8082)
+└── frontend/                       ← React + Vite (port 5173)
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+PROBLEMA: "No compiler is provided in this environment"
+SOLUCIÓN: JAVA_HOME apunta a JRE, no JDK. Configurar JAVA_HOME al JDK 17.
+
+PROBLEMA: "Port 5433/5434/6379 already in use"
+SOLUCIÓN: docker stop postgres-tasks postgres-users redis-kanban
+          docker rm postgres-tasks postgres-users redis-kanban
+          docker-compose up -d postgres-users postgres-tasks redis
+
+PROBLEMA: "Connection refused" al llamar endpoints
+SOLUCIÓN: Verificar que el servicio está corriendo (ver terminal).
+          Verificar puertos: user-service=8082, task-service=8081, frontend=5173
+
+PROBLEMA: Frontend muestra datos viejos
+SOLUCIÓN: docker exec redis-kanban redis-cli FLUSHALL
+          Ctrl+Shift+R en el navegador (hard refresh)
+
+PROBLEMA: "git push" pide credenciales
+SOLUCIÓN: Configurar SSH key o usar GitHub CLI:
+          gh auth login (para GitHub)
+          O usar token personal en la URL:
+          git remote set-url origin https://TOKEN@github.com/USER/REPO.git

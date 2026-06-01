@@ -1,0 +1,296 @@
+================================================================================
+GUÍA DE BÚSQUEDA EN INTERNET PARA RESOLVER CADA BUG
+================================================================================
+Este documento describe qué buscar, dónde buscar, y qué términos usar para
+encontrar la solución de cada bug en Google, Stack Overflow, Baeldung, y
+documentación oficial.
+
+================================================================================
+BUG 1 — Performance: N+1 queries en listado de tareas
+================================================================================
+
+CAPA:           Application (Servicio) + Domain (Repositorio + Entidad)
+UBICACIÓN:      backend/task-service/src/main/java/com/taskmanager/taskservice/
+CLASES:         - application/service/TaskService.java
+                - domain/repository/TaskRepository.java
+                - domain/model/Task.java
+
+BÚSQUEDAS RECOMENDADAS:
+
+1. Para entender el problema:
+   Google: "N+1 problem JPA Hibernate explained"
+   Google: "Spring Data JPA N+1 select problem"
+   Stack Overflow: "hibernate n+1 selects problem"
+
+2. Para la solución SQL (JOIN FETCH):
+   Google: "Spring Data JPA JOIN FETCH custom query"
+   Google: "JPQL JOIN FETCH example Spring Boot"
+   Baeldung: "spring data jpa query annotation join fetch"
+   Stack Overflow: "@Query JOIN FETCH Spring Data JPA"
+
+3. Para la solución del N+1 HTTP (batch loading):
+   Google: "java stream collect toMap distinct ids"
+   Google: "avoid multiple HTTP calls batch request Java"
+   Google: "java stream group by unique ids then map"
+
+4. Para entender FetchType.LAZY vs EAGER:
+   Google: "JPA FetchType LAZY vs EAGER difference"
+   Google: "LazyInitializationException Spring Boot solution"
+   Baeldung: "hibernate lazy loading"
+
+DOCUMENTACIÓN OFICIAL:
+- https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html
+- https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#fetching
+
+
+================================================================================
+BUG 2 — Concurrencia: Race condition en cambio de estado
+================================================================================
+
+CAPA:           Domain (Entidad) + Infrastructure (Exception Handler)
+UBICACIÓN:      backend/task-service/src/main/java/com/taskmanager/taskservice/
+CLASES:         - domain/model/Task.java
+                - infrastructure/web/GlobalExceptionHandler.java
+
+BÚSQUEDAS RECOMENDADAS:
+
+1. Para entender el problema:
+   Google: "race condition database concurrent update"
+   Google: "lost update problem database concurrency"
+   Stack Overflow: "two users update same record simultaneously JPA"
+
+2. Para la solución (Optimistic Locking):
+   Google: "JPA @Version optimistic locking Spring Boot"
+   Google: "Spring Data JPA optimistic locking example"
+   Baeldung: "jpa optimistic locking"
+   Stack Overflow: "OptimisticLockException Spring Boot handle"
+
+3. Para el manejo de la excepción:
+   Google: "Spring Boot handle ObjectOptimisticLockingFailureException"
+   Google: "Spring @ExceptionHandler 409 Conflict"
+   Google: "Spring Boot GlobalExceptionHandler custom exception"
+   Stack Overflow: "return 409 conflict spring boot optimistic lock"
+
+4. Para entender Optimistic vs Pessimistic:
+   Google: "optimistic vs pessimistic locking database comparison"
+   Google: "when to use optimistic locking web application"
+
+DOCUMENTACIÓN OFICIAL:
+- https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html
+- https://jakarta.ee/specifications/persistence/3.1/jakarta-persistence-spec-3.1#a11882
+
+
+================================================================================
+BUG 3 — Resiliencia: Fallo en cascada entre microservicios
+================================================================================
+
+CAPA:           Infrastructure (Client + Config)
+UBICACIÓN:      backend/task-service/src/main/java/com/taskmanager/taskservice/
+CLASES:         - infrastructure/client/UserServiceClient.java
+                - TaskServiceApplication.java (Bean RestTemplate)
+                - src/main/resources/application.yml
+
+BÚSQUEDAS RECOMENDADAS:
+
+1. Para entender el problema:
+   Google: "cascading failure microservices"
+   Google: "microservice dependency failure handling"
+   Google: "RestTemplate timeout configuration Spring Boot"
+
+2. Para la solución de Timeout:
+   Google: "Spring Boot RestTemplate set timeout"
+   Google: "SimpleClientHttpRequestFactory connectTimeout readTimeout"
+   Stack Overflow: "RestTemplate timeout spring boot configuration"
+
+3. Para Circuit Breaker:
+   Google: "Resilience4j circuit breaker Spring Boot 3 tutorial"
+   Google: "Spring Boot @CircuitBreaker annotation example"
+   Baeldung: "resilience4j circuit breaker spring boot"
+   Google: "resilience4j circuit breaker fallback method"
+
+4. Para Retry con Backoff Exponencial:
+   Google: "Resilience4j retry exponential backoff Spring Boot"
+   Google: "Spring Boot @Retry annotation resilience4j"
+   Google: "resilience4j retry configuration application.yml"
+   Stack Overflow: "resilience4j retry with circuit breaker order"
+
+5. Para el patrón Fallback:
+   Google: "circuit breaker fallback pattern microservices"
+   Google: "graceful degradation microservices design pattern"
+
+DOCUMENTACIÓN OFICIAL:
+- https://resilience4j.readme.io/docs/circuitbreaker
+- https://resilience4j.readme.io/docs/retry
+- https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/client/RestTemplate.html
+
+
+================================================================================
+BUG 4 — Cache: Datos stale después de actualizar
+================================================================================
+
+CAPA:           Application (Servicio)
+UBICACIÓN:      backend/task-service/src/main/java/com/taskmanager/taskservice/
+CLASES:         - application/service/TaskService.java
+
+BÚSQUEDAS RECOMENDADAS:
+
+1. Para entender el problema:
+   Google: "Spring Cache stale data after update"
+   Google: "Redis cache not updating after write Spring Boot"
+   Stack Overflow: "spring cacheable returns old data after save"
+
+2. Para la solución (@CacheEvict):
+   Google: "Spring @CacheEvict example"
+   Google: "Spring Boot @CacheEvict multiple caches"
+   Google: "Spring Cache @CacheEvict allEntries true"
+   Baeldung: "spring cache evict"
+
+3. Para entender estrategias de caché:
+   Google: "cache invalidation strategies write-through write-behind"
+   Google: "Spring @Cacheable @CacheEvict @CachePut difference"
+   Google: "Redis cache invalidation best practices Spring Boot"
+
+4. Para configuración de Redis Cache:
+   Google: "Spring Boot Redis cache configuration TTL"
+   Google: "RedisCacheManager custom configuration Spring Boot 3"
+
+DOCUMENTACIÓN OFICIAL:
+- https://docs.spring.io/spring-framework/reference/integration/cache/annotations.html
+- https://docs.spring.io/spring-data/redis/reference/redis/redis-cache.html
+
+
+================================================================================
+BUG 5 — Auth: Token refresh causa loop infinito
+================================================================================
+
+CAPA:           Frontend (API Client / Interceptores HTTP)
+UBICACIÓN:      frontend/src/api/
+CLASES:         - client.ts
+
+BÚSQUEDAS RECOMENDADAS:
+
+1. Para entender el problema:
+   Google: "axios interceptor 401 infinite loop"
+   Google: "axios refresh token loop problem"
+   Stack Overflow: "axios interceptor retry request after refresh token infinite loop"
+
+2. Para la solución (flag _retry):
+   Google: "axios interceptor refresh token retry flag"
+   Google: "axios response interceptor prevent infinite loop 401"
+   Google: "axios interceptor originalRequest._retry"
+   Stack Overflow: "axios interceptor refresh token implementation"
+
+3. Para la solución avanzada (cola de peticiones):
+   Google: "axios interceptor queue failed requests refresh token"
+   Google: "axios refresh token multiple concurrent requests queue"
+   Medium/Dev.to: "axios interceptor refresh token queue implementation"
+
+4. Para entender JWT refresh flow:
+   Google: "JWT access token refresh token flow frontend"
+   Google: "silent refresh token axios React"
+   Google: "handle expired JWT token React axios"
+
+DOCUMENTACIÓN OFICIAL:
+- https://axios-http.com/docs/interceptors
+- https://tanstack.com/query/latest/docs/framework/react/guides/authentication
+
+
+================================================================================
+BUG 6 — UX: Tarea desaparece al fallar drag & drop
+================================================================================
+
+CAPA:           Frontend (Hooks / React Query Mutations)
+UBICACIÓN:      frontend/src/hooks/
+CLASES:         - useTaskMutation.ts
+
+BÚSQUEDAS RECOMENDADAS:
+
+1. Para entender el problema:
+   Google: "React Query optimistic update rollback on error"
+   Google: "useMutation onMutate onError rollback React Query"
+   Stack Overflow: "react query optimistic update revert on failure"
+
+2. Para la solución (patrón optimistic update):
+   Google: "TanStack Query optimistic updates example"
+   Google: "React Query useMutation onMutate context rollback"
+   Google: "react query setQueryData optimistic update previousData"
+   TanStack docs: "optimistic updates"
+
+3. Para invalidateQueries en onSettled:
+   Google: "React Query invalidateQueries after mutation"
+   Google: "react query onSettled vs onSuccess invalidate"
+   Stack Overflow: "when to use onSettled vs onSuccess react query"
+
+4. Para drag and drop con optimistic updates:
+   Google: "react dnd optimistic update revert on error"
+   Google: "kanban board drag drop react query optimistic"
+
+DOCUMENTACIÓN OFICIAL:
+- https://tanstack.com/query/latest/docs/framework/react/guides/optimistic-updates
+- https://tanstack.com/query/latest/docs/framework/react/reference/useMutation
+
+
+================================================================================
+BUG 7 — Memory Leak: Polling sin cleanup
+================================================================================
+
+CAPA:           Frontend (Componentes / useEffect)
+UBICACIÓN:      frontend/src/components/Dashboard/
+CLASES:         - ProjectDashboard.tsx
+
+BÚSQUEDAS RECOMENDADAS:
+
+1. Para entender el problema:
+   Google: "React useEffect cleanup function memory leak"
+   Google: "setInterval memory leak React component unmount"
+   Google: "Can't perform a React state update on an unmounted component"
+   Stack Overflow: "react useEffect setInterval cleanup"
+
+2. Para la solución (cleanup en useEffect):
+   Google: "React useEffect return cleanup clearInterval"
+   Google: "useEffect cleanup function when does it run"
+   Google: "React polling with useEffect cleanup"
+   Baeldung/React docs: "useEffect cleanup"
+
+3. Para alternativas de polling:
+   Google: "React Query refetchInterval polling"
+   Google: "TanStack Query automatic refetching interval"
+   Google: "react polling best practices useEffect vs react query"
+
+4. Para entender memory leaks en React:
+   Google: "React memory leak common causes"
+   Google: "React useEffect subscription cleanup pattern"
+   Google: "detect memory leaks React DevTools"
+
+DOCUMENTACIÓN OFICIAL:
+- https://react.dev/learn/synchronizing-with-effects#how-to-handle-the-effect-firing-twice-in-development
+- https://react.dev/reference/react/useEffect#usage
+
+
+================================================================================
+CONSEJOS GENERALES DE BÚSQUEDA
+================================================================================
+
+1. PRIORIZAR FUENTES:
+   - Documentación oficial (Spring, React, TanStack) → siempre la más confiable
+   - Baeldung (para Java/Spring) → tutoriales completos y actualizados
+   - Stack Overflow → soluciones probadas por la comunidad
+   - GitHub Issues → para bugs específicos de librerías
+
+2. FILTRAR POR VERSIÓN:
+   - Agregar "Spring Boot 3" o "React 18" a las búsquedas
+   - Filtrar resultados por fecha (último año) para evitar soluciones obsoletas
+
+3. PALABRAS CLAVE EFECTIVAS:
+   - Usar el nombre exacto de la excepción (ej: "ObjectOptimisticLockingFailureException")
+   - Usar el nombre de la anotación (ej: "@CacheEvict", "@CircuitBreaker")
+   - Incluir "example" o "tutorial" para resultados prácticos
+
+4. IDIOMA:
+   - Buscar siempre en INGLÉS para mayor cantidad de resultados
+   - La documentación oficial está en inglés
+
+5. STACK OVERFLOW:
+   - Buscar con [tag] para filtrar: [spring-boot] [jpa] N+1
+   - Ordenar por votos para ver las respuestas más validadas
+   - Leer los comentarios — a veces la mejor solución está ahí

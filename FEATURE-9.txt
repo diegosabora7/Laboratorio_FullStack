@@ -1,0 +1,368 @@
+================================================================================
+FEATURE 9 — Dashboard de estadísticas del proyecto
+================================================================================
+
+DESCRIPCIÓN:
+Crear un componente de dashboard que muestre estadísticas visuales del proyecto:
+- Barra de progreso del proyecto (% de tareas completadas)
+- Contadores por status con indicador visual de color
+- Gráfico de distribución (barra horizontal con segmentos de color)
+- Lista de tareas overdue con fecha de vencimiento y asignado
+
+ENDPOINT DISPONIBLE:
+GET /api/tasks/project/{id}/stats → ya implementado, devuelve:
+{
+  "projectId": 1,
+  "totalTasks": 15,
+  "todoCount": 4,
+  "inProgressCount": 5,
+  "inReviewCount": 3,
+  "doneCount": 3,
+  "completionPercentage": 20
+}
+
+ENDPOINT PENDIENTE:
+GET /api/tasks/project/{id}/overdue → actualmente devuelve [] (hay que implementarlo)
+
+================================================================================
+PASO 1: Implementar endpoint /overdue en el Backend
+================================================================================
+
+ARCHIVO A MODIFICAR: backend/task-service/src/main/java/com/taskmanager/taskservice/application/service/TaskService.java
+
+ACCIÓN: Agregar método getOverdueTasks(Long projectId)
+
+LÓGICA:
+- Usar taskRepository.findByProjectIdAndDueDateBeforeAndStatusNot(projectId, LocalDate.now(), TaskStatus.DONE)
+- Mapear cada tarea a TaskResponse con toResponse() o toResponseWithName()
+- Retornar la lista
+
+CÓDIGO A AGREGAR:
+```java
+@Transactional(readOnly = true)
+public List<TaskResponse> getOverdueTasks(Long projectId) {
+    List<Task> overdueTasks = taskRepository.findByProjectIdAndDueDateBeforeAndStatusNot(
+            projectId, LocalDate.now(), TaskStatus.DONE);
+    return overdueTasks.stream()
+            .map(this::toResponse)
+            .collect(Collectors.toList());
+}
+```
+
+NOTA: El import de LocalDate ya debería estar. Si no: import java.time.LocalDate;
+
+================================================================================
+PASO 2: Conectar el endpoint /overdue en el Controller
+================================================================================
+
+ARCHIVO A MODIFICAR: backend/task-service/src/main/java/com/taskmanager/taskservice/infrastructure/web/TaskController.java
+
+ACCIÓN: Modificar el método getOverdue() para que llame al servicio en vez de retornar lista vacía.
+
+CAMBIAR ESTO:
+```java
+@GetMapping("/project/{projectId}/overdue")
+public ResponseEntity<List<TaskResponse>> getOverdue(@PathVariable Long projectId) {
+    return ResponseEntity.ok(List.of());
+}
+```
+
+POR ESTO:
+```java
+@GetMapping("/project/{projectId}/overdue")
+public ResponseEntity<List<TaskResponse>> getOverdue(@PathVariable Long projectId) {
+    return ResponseEntity.ok(taskService.getOverdueTasks(projectId));
+}
+```
+
+================================================================================
+PASO 3: Crear el hook useProjectStats en el Frontend
+================================================================================
+
+ARCHIVO A CREAR: frontend/src/hooks/useProjectStats.ts
+
+CONTENIDO:
+```typescript
+import { useQuery } from '@tanstack/react-query';
+import { taskApi } from '../api/client';
+import { Task } from '../types';
+
+export interface ProjectStats {
+  projectId: number;
+  totalTasks: number;
+  todoCount: number;
+  inProgressCount: number;
+  inReviewCount: number;
+  doneCount: number;
+  completionPercentage: number;
+}
+
+export const useProjectStats = (projectId: number) => {
+  return useQuery<ProjectStats>({
+    queryKey: ['project-stats', projectId],
+    queryFn: async () => {
+      const { data } = await taskApi.get(`/api/tasks/project/${projectId}/stats`);
+      return data;
+    },
+    enabled: !!projectId,
+    refetchInterval: 30000, // Refrescar cada 30s
+  });
+};
+
+export const useOverdueTasks = (projectId: number) => {
+  return useQuery<Task[]>({
+    queryKey: ['overdue-tasks', projectId],
+    queryFn: async () => {
+      const { data } = await taskApi.get(`/api/tasks/project/${projectId}/overdue`);
+      return data;
+    },
+    enabled: !!projectId,
+  });
+};
+```
+
+================================================================================
+PASO 4: Reescribir el componente ProjectDashboard.tsx
+================================================================================
+
+ARCHIVO A MODIFICAR: frontend/src/components/Dashboard/ProjectDashboard.tsx
+
+ACCIÓN: Reemplazar el polling manual con useProjectStats y useOverdueTasks.
+Agregar los componentes visuales:
+
+ESTRUCTURA DEL COMPONENTE:
+1. Barra de progreso (div con width porcentual y color verde)
+2. Contadores por status (4 cards con colores: gris=TODO, azul=IN_PROGRESS, naranja=IN_REVIEW, verde=DONE)
+3. Gráfico de distribución (barra horizontal con 4 segmentos de color proporcionales)
+4. Lista de tareas overdue (tabla/lista con título, fecha, asignado)
+
+COLORES POR STATUS:
+- TODO: #6b7280 (gris)
+- IN_PROGRESS: #3b82f6 (azul)
+- IN_REVIEW: #f59e0b (naranja/amber)
+- DONE: #10b981 (verde)
+
+CÓDIGO SUGERIDO:
+```tsx
+import { useProjectStats, useOverdueTasks } from '../../hooks/useProjectStats';
+
+const ProjectDashboard = () => {
+  const { data: stats, isLoading } = useProjectStats(1);
+  const { data: overdueTasks = [] } = useOverdueTasks(1);
+
+  if (isLoading || !stats) {
+    return <div role="status" aria-live="polite">Cargando estadísticas...</div>;
+  }
+
+  return (
+    <div className="dashboard-container" role="region" aria-label="Dashboard de estadísticas">
+      <h1>📊 Project Dashboard</h1>
+
+      {/* 1. Barra de progreso */}
+      <section aria-label="Progreso del proyecto">
+        <h2>Progreso General</h2>
+        <div className="progress-bar-container">
+          <div 
+            className="progress-bar-fill"
+            style={{ width: `${stats.completionPercentage}%` }}
+            role="progressbar"
+            aria-valuenow={stats.completionPercentage}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            {stats.completionPercentage.toFixed(0)}%
+          </div>
+        </div>
+      </section>
+
+      {/* 2. Contadores por status */}
+      <section aria-label="Contadores por estado">
+        <div className="stats-grid">
+          <div className="stat-card" style={{ borderLeft: '4px solid #6b7280' }}>
+            <h3>📝 TODO</h3>
+            <p className="stat-number">{stats.todoCount}</p>
+          </div>
+          <div className="stat-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+            <h3>🔄 En Progreso</h3>
+            <p className="stat-number">{stats.inProgressCount}</p>
+          </div>
+          <div className="stat-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+            <h3>👀 En Revisión</h3>
+            <p className="stat-number">{stats.inReviewCount}</p>
+          </div>
+          <div className="stat-card" style={{ borderLeft: '4px solid #10b981' }}>
+            <h3>✅ Completado</h3>
+            <p className="stat-number">{stats.doneCount}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Gráfico de distribución (barra horizontal segmentada) */}
+      <section aria-label="Distribución de tareas">
+        <h2>Distribución</h2>
+        <div className="distribution-bar">
+          {stats.todoCount > 0 && (
+            <div style={{ width: `${(stats.todoCount / stats.totalTasks) * 100}%`, backgroundColor: '#6b7280' }}
+                 title={`TODO: ${stats.todoCount}`} />
+          )}
+          {stats.inProgressCount > 0 && (
+            <div style={{ width: `${(stats.inProgressCount / stats.totalTasks) * 100}%`, backgroundColor: '#3b82f6' }}
+                 title={`En Progreso: ${stats.inProgressCount}`} />
+          )}
+          {stats.inReviewCount > 0 && (
+            <div style={{ width: `${(stats.inReviewCount / stats.totalTasks) * 100}%`, backgroundColor: '#f59e0b' }}
+                 title={`En Revisión: ${stats.inReviewCount}`} />
+          )}
+          {stats.doneCount > 0 && (
+            <div style={{ width: `${(stats.doneCount / stats.totalTasks) * 100}%`, backgroundColor: '#10b981' }}
+                 title={`Completado: ${stats.doneCount}`} />
+          )}
+        </div>
+      </section>
+
+      {/* 4. Lista de tareas overdue */}
+      <section aria-label="Tareas vencidas">
+        <h2>⚠️ Tareas Vencidas ({overdueTasks.length})</h2>
+        {overdueTasks.length === 0 ? (
+          <p>No hay tareas vencidas 🎉</p>
+        ) : (
+          <ul className="overdue-list">
+            {overdueTasks.map(task => (
+              <li key={task.id} className="overdue-item">
+                <span className="overdue-title">{task.title}</span>
+                <span className="overdue-date">📅 {task.dueDate}</span>
+                <span className="overdue-assignee">👤 {task.assigneeName || 'Sin asignar'}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+};
+```
+
+================================================================================
+PASO 5: Agregar estilos CSS para el Dashboard
+================================================================================
+
+ARCHIVO A MODIFICAR: frontend/src/styles/Dashboard.css
+
+ESTILOS A AGREGAR (código CSS completo):
+
+```css
+.progress-bar-container {
+  background-color: #e5e7eb;
+  border-radius: 12px;
+  height: 24px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.progress-bar-fill {
+  background-color: #10b981;
+  height: 100%;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: width 0.5s ease;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.distribution-bar {
+  display: flex;
+  height: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.overdue-list {
+  list-style: none;
+  padding: 0;
+}
+
+.overdue-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.overdue-title {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.overdue-date {
+  color: #ef4444;
+  font-size: 0.85rem;
+}
+
+.overdue-assignee {
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+```
+
+================================================================================
+PASO 6: Verificar y probar
+================================================================================
+
+PRUEBAS BACKEND:
+1. Reiniciar task-service
+2. Crear tareas con dueDate en el pasado para probar overdue:
+   POST http://localhost:8081/api/tasks
+   {
+     "title": "Tarea vencida test",
+     "description": "test overdue",
+     "priority": "HIGH",
+     "projectId": 1,
+     "assigneeId": 1,
+     "dueDate": "2024-01-01"
+   }
+3. GET http://localhost:8081/api/tasks/project/1/overdue → debe retornar la tarea
+4. GET http://localhost:8081/api/tasks/project/1/stats → debe retornar conteos correctos
+
+PRUEBAS FRONTEND:
+1. Navegar a http://localhost:5173/dashboard
+2. Verificar que se muestra:
+   - Barra de progreso con porcentaje correcto
+   - 4 cards con contadores por status
+   - Barra de distribución con segmentos de color proporcionales
+   - Lista de tareas vencidas (si hay alguna con dueDate pasado)
+3. Crear una tarea nueva → los contadores deben actualizarse (por el refetchInterval)
+4. Verificar accesibilidad: role="progressbar", aria-labels, semántica correcta
+
+================================================================================
+RESUMEN DE ARCHIVOS
+================================================================================
+
+BACKEND (modificar):
+- TaskService.java → agregar método getOverdueTasks()
+- TaskController.java → conectar endpoint /overdue al servicio
+
+FRONTEND (crear):
+- src/hooks/useProjectStats.ts → hooks para stats y overdue
+
+FRONTEND (modificar):
+- src/components/Dashboard/ProjectDashboard.tsx → reescribir con datos reales
+- src/styles/Dashboard.css → agregar estilos nuevos
+
+FRONTEND (no modificar):
+- src/components/Dashboard/index.ts → ya exporta ProjectDashboard
+- src/pages/Dashboard.tsx → ya importa y renderiza el componente

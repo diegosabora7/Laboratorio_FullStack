@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # Base de datos para user-service
+  postgres-users:
+    image: postgres:15-alpine
+    container_name: postgres-users
+    environment:
+      POSTGRES_DB: users_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_users_data:/var/lib/postgresql/data
+    networks:
+      - kanban-network
+
+  # Base de datos para task-service
+  postgres-tasks:
+    image: postgres:15-alpine
+    container_name: postgres-tasks
+    environment:
+      POSTGRES_DB: tasks_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_tasks_data:/var/lib/postgresql/data
+    networks:
+      - kanban-network
+
+  # Redis para caché del task-service
+  redis:
+    image: redis:7-alpine
+    container_name: redis-kanban
+    ports:
+      - "6379:6379"
+    networks:
+      - kanban-network
+
+  # user-service (puerto 8082)
+  user-service:
+    build:
+      context: ./backend/user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-users:5432/users_db
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: admin123
+    depends_on:
+      - postgres-users
+    networks:
+      - kanban-network
+
+  # task-service (puerto 8081)
+  task-service:
+    build:
+      context: ./backend/task-service
+      dockerfile: Dockerfile
+    container_name: task-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-tasks:5432/tasks_db
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: admin123
+      SPRING_DATA_REDIS_HOST: redis
+      USER_SERVICE_URL: http://user-service:8082
+    depends_on:
+      - postgres-tasks
+      - redis
+      - user-service
+    networks:
+      - kanban-network
+
+  # Frontend (puerto 5173)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend-kanban
+    ports:
+      - "5173:5173"
+    depends_on:
+      - user-service
+      - task-service
+    networks:
+      - kanban-network
+
+volumes:
+  postgres_users_data:
+  postgres_tasks_data:
+
+networks:
+  kanban-network:
+    driver: bridge
