@@ -51,15 +51,22 @@ public class TaskController {
         return ResponseEntity.ok(taskService.assign(id, assigneeId));
     }
 
-    // TODO: [FEATURE - BÚSQUEDA] Implementar endpoint de búsqueda avanzada
-    // Debe aceptar parámetros de filtro (status, priority, assigneeId) y usar
-    // TaskSpecification
+    // CÓDIGO ANTERIOR (placeholder):
+    // @GetMapping("/search")
+    // public ResponseEntity<List<TaskResponse>> search(...) { return ResponseEntity.ok(List.of()); }
+
+    // FEATURE 8: Búsqueda avanzada con filtros dinámicos, paginado y sorteable
     @GetMapping("/search")
-    public ResponseEntity<List<TaskResponse>> search(
+    public ResponseEntity<Page<TaskResponse>> search(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String priority,
-            @RequestParam(required = false) Long assigneeId) {
-        return ResponseEntity.ok(List.of());
+            @RequestParam(required = false) Long assigneeId,
+            @RequestParam(required = false) Long projectId,
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dueBefore,
+            @RequestParam(required = false) Boolean overdue,
+            Pageable pageable) {
+        return ResponseEntity.ok(taskService.search(status, priority, assigneeId, projectId, query, dueBefore, overdue, pageable));
     }
 
     // Endpoint de estadísticas del proyecto - devuelve conteo de tareas por estado

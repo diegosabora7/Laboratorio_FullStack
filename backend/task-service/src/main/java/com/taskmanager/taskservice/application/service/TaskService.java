@@ -7,6 +7,8 @@ import com.taskmanager.taskservice.domain.model.Task;
 import com.taskmanager.taskservice.domain.model.TaskPriority;
 import com.taskmanager.taskservice.domain.model.TaskStatus;
 import com.taskmanager.taskservice.domain.exception.InvalidStatusTransitionException;
+import com.taskmanager.taskservice.domain.specification.TaskSpecification;
+import org.springframework.data.jpa.domain.Specification;
 import com.taskmanager.taskservice.domain.repository.ProjectRepository;
 import com.taskmanager.taskservice.domain.repository.TaskRepository;
 import com.taskmanager.taskservice.infrastructure.client.UserServiceClient;
@@ -132,6 +134,39 @@ public class TaskService {
         task.setAssigneeId(assigneeId);
         Task updated = taskRepository.save(task);
         return toResponse(updated);
+    }
+
+    // FEATURE 8: Búsqueda avanzada con filtros dinámicos y paginación
+    @Transactional(readOnly = true)
+    public Page<TaskResponse> search(String status, String priority, Long assigneeId,
+                                      Long projectId, String query, LocalDate dueBefore,
+                                      Boolean overdue, Pageable pageable) {
+
+        Specification<Task> spec = Specification.where(null);
+
+        if (status != null && !status.isBlank()) {
+            spec = spec.and(TaskSpecification.hasStatus(TaskStatus.valueOf(status)));
+        }
+        if (priority != null && !priority.isBlank()) {
+            spec = spec.and(TaskSpecification.hasPriority(TaskPriority.valueOf(priority)));
+        }
+        if (assigneeId != null) {
+            spec = spec.and(TaskSpecification.hasAssignee(assigneeId));
+        }
+        if (projectId != null) {
+            spec = spec.and(TaskSpecification.hasProject(projectId));
+        }
+        if (query != null && !query.isBlank()) {
+            spec = spec.and(TaskSpecification.titleOrDescriptionContains(query));
+        }
+        if (dueBefore != null) {
+            spec = spec.and(TaskSpecification.dueBefore(dueBefore));
+        }
+        if (Boolean.TRUE.equals(overdue)) {
+            spec = spec.and(TaskSpecification.isOverdue());
+        }
+
+        return taskRepository.findAll(spec, pageable).map(this::toResponse);
     }
 
     @Transactional(readOnly = true)

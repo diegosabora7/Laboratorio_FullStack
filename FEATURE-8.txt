@@ -1,0 +1,616 @@
+================================================================================
+FEATURE 8 — Búsqueda avanzada de tareas (Backend + Frontend)
+================================================================================
+
+DESCRIPCIÓN:
+Implementar búsqueda avanzada con filtros dinámicos, paginado y sorteable.
+
+FILTROS (todos opcionales):
+- status (enum: TODO, IN_PROGRESS, IN_REVIEW, DONE)
+- priority (enum: LOW, MEDIUM, HIGH, CRITICAL)
+- assigneeId (Long)
+- projectId (Long)
+- query (String — búsqueda parcial case-insensitive en title y description)
+- dueBefore (LocalDate)
+- overdue (Boolean — tareas con dueDate pasado y status != DONE)
+
+FRONTEND:
+- Panel de filtros con dropdowns para status, priority, assignee
+- Input de texto para búsqueda libre
+- Chips de filtros activos (con botón X para remover)
+- Sincronización con URL (query params) — al refrescar, los filtros se mantienen
+- Botón "Clear all" para limpiar filtros
+
+
+================================================================================
+PASO 1: Implementar TaskSpecification.java (Spring Data Specifications)
+================================================================================
+
+ARCHIVO A MODIFICAR: backend/task-service/src/main/java/com/taskmanager/taskservice/domain/specification/TaskSpecification.java
+
+EXPLICACIÓN: Spring Data Specifications permiten construir queries dinámicas.
+Cada método estático retorna un Specification<Task> que se puede combinar con AND.
+
+CÓDIGO COMPLETO:
+```java
+package com.taskmanager.taskservice.domain.specification;
+
+import com.taskmanager.taskservice.domain.model.Task;
+import com.taskmanager.taskservice.domain.model.TaskPriority;
+import com.taskmanager.taskservice.domain.model.TaskStatus;
+import org.springframework.data.jpa.domain.Specification;
+
+import java.time.LocalDate;
+
+public class TaskSpecification {
+
+    public static Specification<Task> hasStatus(TaskStatus status) {
+        return (root, query, cb) -> status == null ? null : cb.equal(root.get("status"), status);
+    }
+
+    public static Specification<Task> hasPriority(TaskPriority priority) {
+        return (root, query, cb) -> priority == null ? null : cb.equal(root.get("priority"), priority);
+    }
+
+    public static Specification<Task> hasAssignee(Long assigneeId) {
+        return (root, query, cb) -> assigneeId == null ? null : cb.equal(root.get("assigneeId"), assigneeId);
+    }
+
+    public static Specification<Task> hasProject(Long projectId) {
+        return (root, query, cb) -> projectId == null ? null : cb.equal(root.get("project").get("id"), projectId);
+    }
+
+    public static Specification<Task> titleOrDescriptionContains(String query) {
+        return (root, criteriaQuery, cb) -> {
+            if (query == null || query.isBlank()) return null;
+            String pattern = "%" + query.toLowerCase() + "%";
+            return cb.or(
+                    cb.like(cb.lower(root.get("title")), pattern),
+                    cb.like(cb.lower(root.get("description")), pattern)
+            );
+        };
+    }
+
+    public static Specification<Task> dueBefore(LocalDate date) {
+        return (root, query, cb) -> date == null ? null : cb.lessThan(root.get("dueDate"), date);
+    }
+
+    public static Specification<Task> isOverdue() {
+        return (root, query, cb) -> cb.and(
+                cb.lessThan(root.get("dueDate"), LocalDate.now()),
+                cb.notEqual(root.get("status"), TaskStatus.DONE)
+        );
+    }
+}
+```
+
+
+================================================================================
+PASO 2: Agregar método search() en TaskService.java
+================================================================================
+
+ARCHIVO A MODIFICAR: backend/task-service/src/main/java/com/taskmanager/taskservice/application/service/TaskService.java
+
+EXPLICACIÓN: Combina las specifications dinámicamente según los parámetros recibidos.
+Usa Specification.where() para encadenar con AND.
+
+AGREGAR IMPORTS:
+```java
+import com.taskmanager.taskservice.domain.specification.TaskSpecification;
+import org.springframework.data.jpa.domain.Specification;
+```
+
+AGREGAR MÉTODO:
+```java
+@Transactional(readOnly = true)
+public Page<TaskResponse> search(String status, String priority, Long assigneeId,
+                                  Long projectId, String query, LocalDate dueBefore,
+                                  Boolean overdue, Pageable pageable) {
+
+    Specification<Task> spec = Specification.where(null);
+
+    if (status != null && !status.isBlank()) {
+        spec = spec.and(TaskSpecification.hasStatus(TaskStatus.valueOf(status)));
+    }
+    if (priority != null && !priority.isBlank()) {
+        spec = spec.and(TaskSpecification.hasPriority(TaskPriority.valueOf(priority)));
+    }
+    if (assigneeId != null) {
+        spec = spec.and(TaskSpecification.hasAssignee(assigneeId));
+    }
+    if (projectId != null) {
+        spec = spec.and(TaskSpecification.hasProject(projectId));
+    }
+    if (query != null && !query.isBlank()) {
+        spec = spec.and(TaskSpecification.titleOrDescriptionContains(query));
+    }
+    if (dueBefore != null) {
+        spec = spec.and(TaskSpecification.dueBefore(dueBefore));
+    }
+    if (Boolean.TRUE.equals(overdue)) {
+        spec = spec.and(TaskSpecification.isOverdue());
+    }
+
+    return taskRepository.findAll(spec, pageable).map(this::toResponse);
+}
+```
+
+
+================================================================================
+PASO 3: Actualizar el endpoint /search en TaskController.java
+================================================================================
+
+ARCHIVO A MODIFICAR: backend/task-service/src/main/java/com/taskmanager/taskservice/infrastructure/web/TaskController.java
+
+EXPLICACIÓN: Reemplazar el endpoint placeholder que devuelve List.of() por uno
+que acepta todos los filtros como query params y devuelve Page<TaskResponse>.
+
+AGREGAR IMPORT:
+```java
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
+```
+
+REEMPLAZAR EL MÉTODO search():
+```java
+// FEATURE 8: Búsqueda avanzada con filtros dinámicos, paginado y sorteable
+@GetMapping("/search")
+public ResponseEntity<Page<TaskResponse>> search(
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String priority,
+        @RequestParam(required = false) Long assigneeId,
+        @RequestParam(required = false) Long projectId,
+        @RequestParam(required = false) String query,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dueBefore,
+        @RequestParam(required = false) Boolean overdue,
+        Pageable pageable) {
+    return ResponseEntity.ok(taskService.search(status, priority, assigneeId, projectId, query, dueBefore, overdue, pageable));
+}
+```
+
+
+================================================================================
+PASO 4: Crear hook useTaskSearch en el Frontend
+================================================================================
+
+ARCHIVO A CREAR: frontend/src/hooks/useTaskSearch.ts
+
+EXPLICACIÓN: Hook que llama al endpoint /search con los filtros como query params.
+Usa React Query con los filtros como parte de la queryKey para re-fetch automático.
+
+CÓDIGO:
+```typescript
+import { useQuery } from '@tanstack/react-query';
+import { taskApi } from '../api/client';
+import { Task } from '../types';
+
+export interface SearchFilters {
+  status?: string;
+  priority?: string;
+  assigneeId?: number;
+  projectId?: number;
+  query?: string;
+  dueBefore?: string;
+  overdue?: boolean;
+  page?: number;
+  size?: number;
+}
+
+export interface PageResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+export const useTaskSearch = (filters: SearchFilters) => {
+  return useQuery<PageResponse<Task>>({
+    queryKey: ['tasks-search', filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (filters.status) params.append('status', filters.status);
+      if (filters.priority) params.append('priority', filters.priority);
+      if (filters.assigneeId) params.append('assigneeId', String(filters.assigneeId));
+      if (filters.projectId) params.append('projectId', String(filters.projectId));
+      if (filters.query) params.append('query', filters.query);
+      if (filters.dueBefore) params.append('dueBefore', filters.dueBefore);
+      if (filters.overdue) params.append('overdue', 'true');
+      params.append('page', String(filters.page || 0));
+      params.append('size', String(filters.size || 20));
+
+      const { data } = await taskApi.get(`/api/tasks/search?${params.toString()}`);
+      return data;
+    },
+    enabled: Object.values(filters).some(v => v !== undefined && v !== '' && v !== null),
+  });
+};
+```
+
+
+================================================================================
+PASO 5: Reescribir SearchBar.tsx con filtros funcionales
+================================================================================
+
+ARCHIVO A MODIFICAR: frontend/src/components/TaskFilters/SearchBar.tsx
+
+EXPLICACIÓN: Conectar los dropdowns y el input de texto al hook useTaskSearch.
+Agregar chips de filtros activos y botón "Clear all".
+Sincronizar con URL query params usando useSearchParams de React Router.
+
+CÓDIGO COMPLETO:
+```tsx
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { TaskStatus, TaskPriority } from '../../types';
+
+// CÓDIGO ANTERIOR (placeholder):
+// const SearchBar = () => {
+//   const [searchText, setSearchText] = useState('');
+//   return ( <div className="search-bar"> ... selects disabled ... </div> );
+// };
+
+export interface SearchFiltersState {
+  status: string;
+  priority: string;
+  assigneeId: string;
+  query: string;
+}
+
+interface SearchBarProps {
+  onFiltersChange: (filters: SearchFiltersState) => void;
+}
+
+const SearchBar = ({ onFiltersChange }: SearchBarProps) => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Inicializar desde URL params (sincronización con URL)
+  const [filters, setFilters] = useState<SearchFiltersState>({
+    status: searchParams.get('status') || '',
+    priority: searchParams.get('priority') || '',
+    assigneeId: searchParams.get('assigneeId') || '',
+    query: searchParams.get('query') || '',
+  });
+
+  // Sincronizar filtros con URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filters.status) params.set('status', filters.status);
+    if (filters.priority) params.set('priority', filters.priority);
+    if (filters.assigneeId) params.set('assigneeId', filters.assigneeId);
+    if (filters.query) params.set('query', filters.query);
+    setSearchParams(params, { replace: true });
+    onFiltersChange(filters);
+  }, [filters]);
+
+  const updateFilter = (key: keyof SearchFiltersState, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const removeFilter = (key: keyof SearchFiltersState) => {
+    setFilters(prev => ({ ...prev, [key]: '' }));
+  };
+
+  const clearAll = () => {
+    setFilters({ status: '', priority: '', assigneeId: '', query: '' });
+  };
+
+  // Filtros activos para mostrar como chips
+  const activeFilters = Object.entries(filters).filter(([_, value]) => value !== '');
+
+  return (
+    <div className="search-filters">
+      <div className="search-bar">
+        <input
+          type="text"
+          placeholder="Buscar en título o descripción..."
+          value={filters.query}
+          onChange={(e) => updateFilter('query', e.target.value)}
+          className="search-input"
+          aria-label="Buscar tareas"
+        />
+
+        <select
+          className="search-select"
+          value={filters.status}
+          onChange={(e) => updateFilter('status', e.target.value)}
+          aria-label="Filtrar por estado"
+        >
+          <option value="">Estado</option>
+          <option value="TODO">TODO</option>
+          <option value="IN_PROGRESS">IN_PROGRESS</option>
+          <option value="IN_REVIEW">IN_REVIEW</option>
+          <option value="DONE">DONE</option>
+        </select>
+
+        <select
+          className="search-select"
+          value={filters.priority}
+          onChange={(e) => updateFilter('priority', e.target.value)}
+          aria-label="Filtrar por prioridad"
+        >
+          <option value="">Prioridad</option>
+          <option value="LOW">LOW</option>
+          <option value="MEDIUM">MEDIUM</option>
+          <option value="HIGH">HIGH</option>
+          <option value="CRITICAL">CRITICAL</option>
+        </select>
+
+        <select
+          className="search-select"
+          value={filters.assigneeId}
+          onChange={(e) => updateFilter('assigneeId', e.target.value)}
+          aria-label="Filtrar por asignado"
+        >
+          <option value="">Asignado</option>
+          <option value="1">Usuario 1</option>
+          <option value="2">Usuario 2</option>
+        </select>
+      </div>
+
+      {/* Chips de filtros activos */}
+      {activeFilters.length > 0 && (
+        <div className="filter-chips" role="list" aria-label="Filtros activos">
+          {activeFilters.map(([key, value]) => (
+            <span key={key} className="filter-chip" role="listitem">
+              {key}: {value}
+              <button
+                onClick={() => removeFilter(key as keyof SearchFiltersState)}
+                className="chip-remove"
+                aria-label={`Remover filtro ${key}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <button onClick={clearAll} className="clear-all-btn">
+            Clear all
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SearchBar;
+```
+
+
+================================================================================
+PASO 6: Actualizar la página Kanban para integrar búsqueda
+================================================================================
+
+ARCHIVO A MODIFICAR: frontend/src/pages/Kanban.tsx
+
+EXPLICACIÓN: Conectar el SearchBar con el estado de filtros y pasar los resultados
+de búsqueda al KanbanBoard o mostrar resultados filtrados.
+
+CÓDIGO COMPLETO:
+```tsx
+import { useState } from 'react';
+import { KanbanBoard } from '../components/KanbanBoard';
+import SearchBar, { SearchFiltersState } from '../components/TaskFilters/SearchBar';
+import { useTaskSearch } from '../hooks/useTaskSearch';
+import '../styles/Kanban.css';
+
+const Kanban = () => {
+  const [projectId] = useState(1);
+  const [filters, setFilters] = useState<SearchFiltersState>({
+    status: '', priority: '', assigneeId: '', query: ''
+  });
+
+  const hasActiveFilters = Object.values(filters).some(v => v !== '');
+
+  const { data: searchResults } = useTaskSearch({
+    status: filters.status || undefined,
+    priority: filters.priority || undefined,
+    assigneeId: filters.assigneeId ? Number(filters.assigneeId) : undefined,
+    query: filters.query || undefined,
+    projectId: projectId,
+  });
+
+  return (
+    <div className="kanban-container">
+      <div className="kanban-header">
+        <h1>Tablero Kanban</h1>
+      </div>
+
+      <SearchBar onFiltersChange={setFilters} />
+
+      {hasActiveFilters && searchResults ? (
+        <div className="search-results">
+          <h2>Resultados de búsqueda ({searchResults.totalElements})</h2>
+          <div className="search-results-list">
+            {searchResults.content.map(task => (
+              <div key={task.id} className="search-result-item">
+                <span className="result-title">{task.title}</span>
+                <span className="result-status">{task.status}</span>
+                <span className="result-priority">{task.priority}</span>
+                <span className="result-assignee">{task.assigneeName || 'Sin asignar'}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <KanbanBoard projectId={projectId} />
+      )}
+    </div>
+  );
+};
+
+export default Kanban;
+```
+
+
+================================================================================
+PASO 7: Agregar estilos CSS para filtros y resultados
+================================================================================
+
+ARCHIVO A MODIFICAR: frontend/src/styles/Kanban.css
+
+ESTILOS A AGREGAR al final:
+
+```css
+/* Feature 8 — Búsqueda avanzada */
+.search-filters {
+  margin-bottom: 20px;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  align-items: center;
+}
+
+.filter-chip {
+  background-color: #e0e7ff;
+  color: #3730a3;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip-remove {
+  background: none;
+  border: none;
+  color: #3730a3;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.chip-remove:hover {
+  color: #dc2626;
+}
+
+.clear-all-btn {
+  background: none;
+  border: 1px solid #d1d5db;
+  color: #6b7280;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.clear-all-btn:hover {
+  background-color: #f3f4f6;
+}
+
+.search-results {
+  margin-top: 16px;
+}
+
+.search-results h2 {
+  font-size: 1.1rem;
+  color: #1f2937;
+  margin-bottom: 12px;
+}
+
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.search-result-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.result-title {
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+}
+
+.result-status,
+.result-priority,
+.result-assignee {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-left: 16px;
+}
+```
+
+
+================================================================================
+PASO 8: Actualizar el barrel export de TaskFilters
+================================================================================
+
+ARCHIVO A MODIFICAR: frontend/src/components/TaskFilters/index.ts
+
+CÓDIGO:
+```typescript
+export { default as SearchBar } from './SearchBar';
+```
+(Este ya existe y no necesita cambios, pero verificar que exporta correctamente)
+
+
+================================================================================
+PASO 9: Verificar y probar
+================================================================================
+
+PRUEBAS BACKEND:
+1. Reiniciar task-service
+2. Búsqueda por status:
+   GET http://localhost:8081/api/tasks/search?status=TODO&page=0&size=10
+   → Debe retornar solo tareas en TODO (paginado)
+
+3. Búsqueda por prioridad:
+   GET http://localhost:8081/api/tasks/search?priority=HIGH&page=0&size=10
+   → Debe retornar solo tareas HIGH
+
+4. Búsqueda por texto (case-insensitive):
+   GET http://localhost:8081/api/tasks/search?query=login&page=0&size=10
+   → Debe retornar tareas cuyo título o descripción contenga "login"
+
+5. Búsqueda combinada:
+   GET http://localhost:8081/api/tasks/search?status=TODO&priority=HIGH&projectId=1&page=0&size=10
+   → Debe retornar tareas que cumplan TODOS los filtros
+
+6. Búsqueda overdue:
+   GET http://localhost:8081/api/tasks/search?overdue=true&page=0&size=10
+   → Debe retornar tareas con dueDate pasado y status != DONE
+
+7. Búsqueda con sort:
+   GET http://localhost:8081/api/tasks/search?sort=priority,desc&page=0&size=10
+   → Debe retornar ordenado por prioridad descendente
+
+PRUEBAS FRONTEND:
+1. Navegar a http://localhost:5173/kanban
+2. Escribir texto en el input → se muestran resultados filtrados
+3. Seleccionar un status del dropdown → aparece chip con el filtro
+4. Clic en X del chip → se remueve ese filtro
+5. Clic en "Clear all" → se limpian todos los filtros y vuelve el Kanban
+6. Refrescar la página → los filtros se mantienen (URL params)
+7. Copiar la URL con filtros y abrir en otra pestaña → mismos filtros aplicados
+
+
+================================================================================
+RESUMEN DE ARCHIVOS
+================================================================================
+
+BACKEND (modificar):
+- domain/specification/TaskSpecification.java → implementar specifications
+- application/service/TaskService.java → agregar método search()
+- infrastructure/web/TaskController.java → actualizar endpoint /search
+
+FRONTEND (crear):
+- src/hooks/useTaskSearch.ts → hook para búsqueda con filtros
+
+FRONTEND (modificar):
+- src/components/TaskFilters/SearchBar.tsx → filtros funcionales + chips + URL sync
+- src/pages/Kanban.tsx → integrar búsqueda con resultados
+- src/styles/Kanban.css → estilos para chips y resultados
