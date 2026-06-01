@@ -25,6 +25,7 @@ PASO 1: Crear repositorio en GitHub
 7. Clic en "Create repository"
 8. Copiar la URL del repositorio (ej: https://github.com/TU_USUARIO/Laboratorio_FullStack.git)
 https://github.com/diegosabora7/Laboratorio_FullStack.git
+https://github.com/dxyandun/Laboratorio_FullStack.git
 
 
 PASO 2: Inicializar Git y subir (ejecutar en PowerShell)
@@ -45,6 +46,8 @@ git commit -m "feat: proyecto completo - 7 bugs corregidos + Feature 9 Dashboard
 
 # Agregar el remote de GitHub
 git remote add origin https://github.com/TU_USUARIO/Laboratorio_FullStack.git
+git remote add origin https://github.com/diegosabora7/Laboratorio_FullStack.git
+git remote add origin https://github.com/dxyandun/Laboratorio_FullStack.git
 
 # Subir a GitHub (rama main)
 git branch -M main
