@@ -76,6 +76,7 @@ PASO 1: Crear repositorio en GitLab
 4. DESMARCAR "Initialize repository with a README"
 5. Clic en "Create project"
 6. Copiar la URL (ej: https://gitlab.com/TU_USUARIO/Laboratorio_FullStack.git)
+https://gitlab.com/dxyandun/laboratorio_fullstack.git
 
 PASO 2: Agregar GitLab como segundo remote (si ya subiste a GitHub)
 ───────────────────────────────────────────────────────────────────
@@ -83,6 +84,7 @@ cd C:\Users\USUARIO\Documents\kiro_Diners\Laboratorio_FullStack
 
 # Agregar GitLab como segundo remote
 git remote add gitlab https://gitlab.com/TU_USUARIO/Laboratorio_FullStack.git
+git remote add gitlab https://gitlab.com/dxyandun/laboratorio_fullStack.git
 
 # Subir a GitLab
 git push -u gitlab main
@@ -93,8 +95,8 @@ cd C:\Users\USUARIO\Documents\kiro_Diners\Laboratorio_FullStack
 
 git init
 git add .
-git commit -m "feat: proyecto completo - 7 bugs corregidos + Feature 9 Dashboard"
-git remote add origin https://gitlab.com/TU_USUARIO/Laboratorio_FullStack.git
+git commit -m "feat: Proyecto Laboratorio"
+git remote add origin https://gitlab.com/dxyandun/laboratorio_fullStack.git
 git branch -M main
 git push -u origin main
 
